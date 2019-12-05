@@ -13,6 +13,8 @@ import gov.nist.microanalysis.EPQLibrary.ISpectrumData;
 import gov.nist.microanalysis.EPQLibrary.SpectrumProperties;
 import gov.nist.microanalysis.EPQLibrary.SpectrumUtils;
 import gov.nist.microanalysis.EPQLibrary.StandardBundle;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 
 /**
  * <p>
@@ -232,6 +234,25 @@ public class SpectrumFile {
       return res;
    }
 
+   static public ISpectrumData[] openEMSAString(final String string, final String title) 
+		   throws EPQException {
+      try {
+         ISpectrumData[] res = null;
+            final EMSAFile ef = new EMSAFile();
+            try (final InputStream st3 = new ByteArrayInputStream(string.getBytes())) {
+               ef.read(st3);
+               ef.setFilename(title);
+               res = new ISpectrumData[1];
+               res[0] = ef;
+            }
+            return wrapResult(res, new File(title));
+	  }
+	  catch(Exception e) {
+		  throw new EPQException(e);
+	  }
+   }
+		   
+   
    @SuppressWarnings("resource")
    static public ISpectrumData[] open(final File file)
          throws EPQException {
