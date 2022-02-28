@@ -7,8 +7,6 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.awt.image.WritableRaster;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,14 +16,14 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
 import gov.nist.microanalysis.EPQLibrary.Detector.EDSDetector;
-import gov.nist.microanalysis.EPQTools.SpectrumFile.ZombieSpectrum;
-import gov.nist.microanalysis.EPQTools.WriteSpectrumAsTIFF;
 import gov.nist.microanalysis.Utility.DescriptiveStatistics;
 import gov.nist.microanalysis.Utility.HalfUpFormat;
+import gov.nist.microanalysis.Utility.Interval;
 import gov.nist.microanalysis.Utility.LinearRegression;
 import gov.nist.microanalysis.Utility.Math2;
 import gov.nist.microanalysis.Utility.PoissonDeviate;
@@ -1469,39 +1467,6 @@ final public class SpectrumUtils {
 	}
 
 	/**
-	 * Turns a spectrum into a ZombieSpectrum which is more friendly way to store a
-	 * spectrum in low memory circumstances.
-	 * 
-	 * @param spec
-	 * @return A ZombieSpectrum or the original ISpectrumData if a zombie can't be
-	 *         created.
-	 */
-	static public ISpectrumData createZombieSpectrum(ISpectrumData spec) {
-		if (spec instanceof ZombieSpectrum)
-			return spec;
-		try {
-			File f = null;
-			final String fn = spec.getProperties().getTextWithDefault(SpectrumProperties.SourceFile, null);
-			if (fn != null) {
-				f = new File(fn);
-				if (!f.exists())
-					f = null;
-			}
-			if (f == null) {
-				f = File.createTempFile("spec", ".tif");
-				try (final FileOutputStream fos = new FileOutputStream(f)) {
-					WriteSpectrumAsTIFF.write(spec, fos);
-				}
-				f.deleteOnExit();
-			}
-			return new ZombieSpectrum(f);
-		} catch (final Exception e) {
-			e.printStackTrace();
-			return spec;
-		}
-	}
-
-	/**
 	 * Returns a copy of the input spectrum with the intensity of the spectrum data
 	 * scale by the specified amount.
 	 * 
@@ -1588,7 +1553,7 @@ final public class SpectrumUtils {
 		for (int i = 0; i < lldCh; ++i)
 			if (spec.getCounts(i) != 0.0) {
 				final EditableSpectrum es = new EditableSpectrum(spec);
-				for (int j = 0; j < lldCh; ++j)
+				for (int j = i; j < lldCh; ++j)
 					es.setCounts(j, 0.0);
 				return es;
 			}
@@ -1717,10 +1682,11 @@ final public class SpectrumUtils {
 			final double res = (Math.PI / 2.0) - Math2.angleBetween(vec, getSurfaceNormal(props));
 			assert (Math2.distance(getSurfaceNormal(props), Math2.MINUS_Z_AXIS) > 0.01) || (Math.abs(res - Math
 					.toRadians(props.getNumericWithDefault(SpectrumProperties.Elevation, Math.toDegrees(res)))) < Math
-							.toRadians(5.0)) : "The computed TOA and default TOA differ by "
-									+ Double.toString(Math.toDegrees(res) - props
-											.getNumericWithDefault(SpectrumProperties.Elevation, Math.toDegrees(res)))
-									+ "\u00B0";
+							.toRadians(5.0))
+					: "The computed TOA and default TOA differ by "
+							+ Double.toString(Math.toDegrees(res)
+									- props.getNumericWithDefault(SpectrumProperties.Elevation, Math.toDegrees(res)))
+							+ "\u00B0";
 			return res;
 		} else
 			return getTakeOffAngle(props);
@@ -1770,7 +1736,7 @@ final public class SpectrumUtils {
 	static public double getDose(SpectrumProperties props) throws EPQException {
 		final double fc = getAverageFaradayCurrent(props, 0.0);
 		if (fc <= 0.0)
-			throw new EPQException("The beam current is unavailable.");
+			throw new EPQException("The probe current is unavailable.");
 		final double lt = props.getNumericWithDefault(SpectrumProperties.LiveTime, 0.0);
 		if (lt <= 0.0)
 			throw new EPQException("The live-time is unavailable.");
@@ -2282,7 +2248,7 @@ final public class SpectrumUtils {
 			res = remap(spec, det.getChannelCount());
 			res.getProperties().setDetector(det);
 		} else
-			return res = spec;
+			res = spec;
 		return res;
 	}
 
@@ -2321,4 +2287,44 @@ final public class SpectrumUtils {
 		return true;
 	}
 
+	public static ISpectrumData sum(Collection<ISpectrumData> specs) {
+		SpectrumMath res = null;
+		for (ISpectrumData s : specs)
+			if (res == null)
+				res = new SpectrumMath(s);
+			else
+				res.add(s, 1.0);
+		return SpectrumUtils.copy(res);
+	}
+
+	public static double chiSqr(ISpectrumData spec1, ISpectrumData spec2, Collection<Interval> intervals)
+			throws EPQException {
+		double k1 = 1.0 / SpectrumUtils.getDose(spec1.getProperties());
+		double k2 = 1.0 / SpectrumUtils.getDose(spec2.getProperties());
+		double d = 0.0, su = 0.0;
+		for (Interval ii : intervals)
+			for (int i = ii.min(); i < ii.max(); ++i) {
+				d += Math2.sqr(k1 * spec1.getCounts(i) - k2 * spec2.getCounts(i));
+				su += k1 * k1 * Math.max(1.0, spec1.getCounts(i)) + k2 * k2 * Math.max(1.0, spec2.getCounts(i));
+			}
+		return d / su;
+	}
+
+	public static SortedSet<Interval> asIntervals(ISpectrumData spec, RegionOfInterestSet rois) {
+		final double e0 = SpectrumUtils.getBeamEnergy(spec);
+		SortedSet<Interval> intervals = new TreeSet<Interval>();
+		for (RegionOfInterestSet.RegionOfInterest roi : rois) {
+			if (roi.lowEnergy() < e0) {
+				final Interval i = new Interval(SpectrumUtils.channelForEnergy(spec, FromSI.eV(roi.lowEnergy())),
+						SpectrumUtils.channelForEnergy(spec, Math.min(FromSI.eV(roi.highEnergy()), e0)));
+				intervals = Interval.add(intervals, i);
+			}
+		}
+		return intervals;
+	}
+
+	public static double measureDissimilarity(ISpectrumData spec, Collection<ISpectrumData> specs, RegionOfInterestSet rois) throws EPQException {
+		assert !specs.contains(spec);
+		return specs.size()==0 ? 1.0 : chiSqr(spec, sum(specs), asIntervals(spec, rois));
+	}
 }

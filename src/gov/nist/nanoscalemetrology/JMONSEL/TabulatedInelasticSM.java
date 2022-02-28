@@ -366,7 +366,7 @@ public class TabulatedInelasticSM
             energySE = (deltaE + bEref) - pickBE(Eq, deltaE);
             if((energySE + energyCBbottom) < minEgenSE)
                return null;
-            thetaSE = Math.PI / 2. - theta;
+            thetaSE = (Math.PI / 2.) - theta;
             phiSE = phi + Math.PI;
             // Generate SE, apply energy loss and trajectory change to SE here
             se = new Electron(pe, theta0PE, phi0PE, energySE);
@@ -393,7 +393,7 @@ public class TabulatedInelasticSM
             }
             if((energySE + energyCBbottom) < minEgenSE)
                return null;
-            thetaSE = Math.PI / 2. - theta;
+            thetaSE = (Math.PI / 2.) - theta;
             phiSE = phi + Math.PI;
             // Generate SE, apply energy loss and trajectory change to SE here
             se = new Electron(pe, theta0PE, phi0PE, energySE);
@@ -429,10 +429,11 @@ public class TabulatedInelasticSM
                   se = new Electron(pe, theta0PE, phi0PE, energySE);
                   // Determine angles of SE q vector relative to PE original
                   // direction
-                  thetaSE = Math.PI / 2. - theta;
+                  thetaSE = (Math.PI / 2.) - theta;
                   phiSE = phi + Math.PI;
                   // Combine with adjustment for additional simESEf deflection
-                  double[] newdir = updateDirection(thetaSE, phiSE, energytheta[1], 2. * Math.PI * Math2.rgen.nextDouble());
+                  final double[] newdir = updateDirection(thetaSE, phiSE, energytheta[1], 2. * Math.PI
+                        * Math2.rgen.nextDouble());
                   // Update SE direction by this combined amount
                   se.updateDirection(newdir[0], newdir[1]);
 
@@ -479,7 +480,7 @@ public class TabulatedInelasticSM
     * used by the Electron class to deflect an electron, except that it accepts
     * the initial angles in addition to the deflections and it returns the final
     * angles.
-    * 
+    *
     * @param theta double - The original polar angle
     * @param phi double - The original azimuthal angle
     * @param dTheta double - The deflection polar angle (0 = no deflection)

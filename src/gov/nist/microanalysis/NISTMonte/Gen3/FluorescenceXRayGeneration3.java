@@ -99,7 +99,7 @@ final public class FluorescenceXRayGeneration3
     */
    @Override
    protected void initializeDefaultStrategy() {
-      addDefaultAlgorithm(MassAbsorptionCoefficient.class, MassAbsorptionCoefficient.Chantler2005);
+      addDefaultAlgorithm(MassAbsorptionCoefficient.class, MassAbsorptionCoefficient.Default);
       addDefaultAlgorithm(JumpRatio.class, JumpRatio.Springer1967);
       addDefaultAlgorithm(TransitionProbabilities.class, TransitionProbabilities.Default);
    }
@@ -222,6 +222,7 @@ final public class FluorescenceXRayGeneration3
                         startR = endR;
                         start = end;
                         // Generate a random step of absLen in direction dir
+                        assert startR != null;
                         final Material startMat = startR.getMaterial();
                         generateFluor = startMat.getDensity() >= 1.0e-6;
                         final double len = generateFluor ? mMac.meanFreePath(startMat, xrE) * Math2.expRand() : 1.0e6;
@@ -238,7 +239,6 @@ final public class FluorescenceXRayGeneration3
                               takeAnotherStep = false;
                            }
                         }
-                        assert startR != null;
                      }
 
                      // X-ray scatter event occurs at double[] 'end' in Region

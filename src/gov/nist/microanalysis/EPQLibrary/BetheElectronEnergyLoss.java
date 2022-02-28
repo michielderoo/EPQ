@@ -46,7 +46,28 @@ abstract public class BetheElectronEnergyLoss
    protected void initializeDefaultStrategy() {
       addDefaultAlgorithm(MeanIonizationPotential.class, MeanIonizationPotential.Berger83);
    }
-
+   
+   /***
+    * Converts from SI to (eV/A) per (g/cm^3)
+    * 
+    * @param val
+    * @return val in (eV/A) per (g/cm^3)
+    */
+   public static double toNatural(double val) {
+	   // (J*m^2/kg)*(eV/J)*(A/m)/(g/kg)   => eV/A
+	   return val*(FromSI.EV/FromSI.ANGSTROM)/(FromSI.GRAM/Math.pow(FromSI.CM,3.0));
+   }
+   
+   /**
+    * Converts from (eV/A) per (g/cm^3) to SI units.
+    * 
+    * 
+    * @param val
+    * @return val in SI (K/M) per (kg/m^3)
+    */
+   public static double fromNatural(double val) {
+   		return val*(ToSI.EV / ToSI.ANGSTROM)/(ToSI.GRAM/Math.pow(ToSI.CM,3.0));
+   }
    /**
     * compute - Computes dE/ds in Joules/meter per kg/meter^3
     * 
@@ -69,18 +90,17 @@ abstract public class BetheElectronEnergyLoss
       JoyLuoBetheElectronEnergyLoss() {
          super("Joy-Luo", LitReference.Goldstein);
          for(int z = Element.elmH; z < Element.elmEndOfElements; ++z)
-            mK[z] = 0.731 + (0.0688 * Math.log10(z));
+            mK[z] = 0.731 + 0.0688 * Math.log10(z);
       }
-
-      private final double K = -(785 * ToSI.EV * Math.pow(ToSI.CM, 3.0)) / (ToSI.ANGSTROM * ToSI.GRAM);
-
+      
       @Override
       public double compute(Element el, double eB) {
          final int z = el.getAtomicNumber();
          final MeanIonizationPotential mip = (MeanIonizationPotential) getAlgorithm(MeanIonizationPotential.class);
-         final double j = mip.compute(el);
-         final double j_star = j / (1.0 + ((mK[z] * j) / eB));
-         return ((K * z) / (el.getAtomicWeight() * FromSI.eV(eB))) * Math.log((1.166 * eB) / j_star);
+         final double j = FromSI.eV(mip.compute(el)), e = FromSI.eV(eB);
+         final double k = 0.731 + 0.0688 * Math.log10(z);
+         final double j_star = j / (1.0 + k * j / e);
+         return fromNatural(((-785.0 * z) / (el.getAtomicWeight() * e)) * Math.log(1.166 * e / j_star));  
       }
    };
 
@@ -97,8 +117,6 @@ abstract public class BetheElectronEnergyLoss
          super("Bethe(Modified)", new LitReference.CrudeReference("Bethe H. Ann. Phys. (Leipzig) 1930; 5: 325"));
       }
 
-      private final double K = -(785 * ToSI.EV * Math.pow(ToSI.CM, 3.0)) / (ToSI.ANGSTROM * ToSI.GRAM);
-
       @Override
       public double compute(Element el, double eB) {
          final MeanIonizationPotential mip = (MeanIonizationPotential) getAlgorithm(MeanIonizationPotential.class);
@@ -108,7 +126,7 @@ abstract public class BetheElectronEnergyLoss
          // The low energy modification...
          if(f < 1.1)
             f = 1.1;
-         return ((K * el.getAtomicNumber()) / (el.getAtomicWeight() * e_eV)) * Math.log(f);
+         return fromNatural(((-785.0 * el.getAtomicNumber()) / (el.getAtomicWeight() * e_eV)) * Math.log(f));
       }
    }
 
@@ -125,60 +143,17 @@ abstract public class BetheElectronEnergyLoss
          super("Bethe", new LitReference.CrudeReference("Bethe H. Ann. Phys. (Leipzig) 1930; 5: 325"));
       }
 
-      private final double K = -(785 * ToSI.EV * Math.pow(ToSI.CM, 3.0)) / (ToSI.ANGSTROM * ToSI.GRAM);
-
       @Override
       public double compute(Element el, double eB) {
          final MeanIonizationPotential mip = (MeanIonizationPotential) getAlgorithm(MeanIonizationPotential.class);
          final double e_eV = FromSI.eV(eB);
          final double j = FromSI.eV(mip.compute(el));
          final double f = (1.166 * e_eV) / j;
-         return ((K * el.getAtomicNumber()) / (el.getAtomicWeight() * e_eV)) * Math.log(f);
+         return fromNatural(((-785.0*el.getAtomicNumber()) / (el.getAtomicWeight() * e_eV)) * Math.log(f));
       }
 
    }
 
    static public BetheElectronEnergyLoss Bethe1930Strict = new Bethe30ElectronEnergyLoss();
-
-   /**
-    * <p>
-    * Modifies an existing BetheElectronEnergyLoss model to add variation in the
-    * amount of energy lost per step. The class takes the nominal energy loss
-    * and modifies it by a certain randomized fractional amount to emulate the
-    * way sometimes an electron may loose slightly more than average or slightly
-    * less than average.
-    * </p>
-    * <p>
-    * Copyright: Pursuant to title 17 Section 105 of the United States Code this
-    * software is not subject to copyright protection and is in the public
-    * domain
-    * </p>
-    * <p>
-    * Institution: National Institute of Standards and Technology
-    * </p>
-    * 
-    * @author nritchie
-    * @version 1.0
-    */
-   static public class StragglingModified
-      extends BetheElectronEnergyLoss {
-
-      private final BetheElectronEnergyLoss mBethe;
-      private final double mPercent;
-      private final Random mRandom;
-
-      public StragglingModified(BetheElectronEnergyLoss base, double percent) {
-         super("Straggling[" + base.getName() + "]", base.getReferenceObj());
-         mBethe = base;
-         mPercent = percent;
-         mRandom = new Random();
-      }
-
-      @Override
-      public double compute(Element elm, double eB) {
-         final double bee = mBethe.compute(elm, eB);
-         return Math.min(0.0, bee * (1.0 + (mRandom.nextGaussian() * mPercent)));
-      }
-   }
 
 }

@@ -559,7 +559,10 @@ public class Composition implements Comparable<Composition>, Cloneable, Serializ
 	 */
 	public UncertainValue2 atomicPercentU(Element elm, boolean positiveOnly) {
 		final UncertainValue2 o = mConstituentsAtomic.get(elm);
-		return o != null ? UncertainValue2.nonNegative(o) : UncertainValue2.ZERO;
+		double norm=0.0;
+		for (Element elm2 : mConstituentsAtomic.keySet())
+			norm+=mConstituentsAtomic.get(elm2).doubleValue();
+		return o != null ? normalize(UncertainValue2.nonNegative(o), norm, false) : UncertainValue2.ZERO;
 	}
 
 	/**
@@ -1315,8 +1318,8 @@ public class Composition implements Comparable<Composition>, Cloneable, Serializ
 	public Composition normalize() {
 		final Composition res = new Composition();
 		for (final Element elm : getElementSet())
-			res.addElement(elm, weightPercent(elm, true));
-		res.setName(getName());
+			res.addElement(elm, weightFraction(elm, true));
+		res.setName("N"+getName());
 		return res;
 	}
 
