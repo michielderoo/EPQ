@@ -11,6 +11,9 @@ import gov.nist.microanalysis.EPQLibrary.ISpectrumData;
 import gov.nist.microanalysis.EPQLibrary.SpectrumProperties;
 import gov.nist.microanalysis.EPQLibrary.StandardBundle;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+
 /**
  * <p>
  * A utility class to open spectrum files of all ilks..
